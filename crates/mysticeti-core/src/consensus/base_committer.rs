@@ -17,9 +17,9 @@ use crate::{
 type WaveNumber = u64;
 
 pub struct BaseCommitterOptions {
-    /// The length of a wave (minimum 3)
+    /// The length of a wave (minimum 5)
     pub wave_length: u64,
-    /// The offset used in the leader-election protocol. THis is used by the multi-committer to ensure
+    /// The offset used in the leader-election protocol. This is used by the multi-committer to ensure
     /// that each [`BaseCommitter`] instance elects a different leader.
     pub leader_offset: u64,
     /// The offset of the first wave. This is used by the pipelined committer to ensure that each
@@ -70,16 +70,21 @@ impl BaseCommitter {
     }
 
     /// Return the leader round of the specified wave number. The leader round is always the first
-    /// round of the wave.
+    /// round of the wave. 
     fn leader_round(&self, wave: WaveNumber) -> RoundNumber {
         wave * self.options.wave_length + self.options.round_offset
     }
 
     /// Return the decision round of the specified wave. The decision round is always the last
-    /// round of the wave.
+    /// round of the wave. 
     fn decision_round(&self, wave: WaveNumber) -> RoundNumber {
         let wave_length = self.options.wave_length;
         wave * wave_length + wave_length - 1 + self.options.round_offset
+    }
+
+    /// Return the certification round.
+    fn certification_round(&self, wave: WaveNumber) -> RoundNumber {
+        self.decision_round(wave)-1
     }
 
     /// The leader-elect protocol is offset by `leader_offset` to ensure that different committers
@@ -100,27 +105,41 @@ impl BaseCommitter {
     /// (author, round)  will be supported by the given block. If block A supports B at (author, round),
     /// it is guaranteed that any processed block by the same author that directly or indirectly includes
     /// A will also support B at (author, round).
-    fn find_support(
+    fn find_support( // Returns a set of block supported by (author, round)
         &self,
         (author, round): (AuthorityIndex, RoundNumber),
         from: &Data<StatementBlock>,
     ) -> Option<BlockReference> {
-        if from.round() < round {
+        if from.round() < round-1 { 
             return None;
-        }
-        for include in from.includes() {
+        } 
+        for include in from.includes() { // iterates over all hash links to other blocks this block includes
+
+            // from.includes() is a list of block references to the previous round blocks
+            // for inlcude in from.includes() iterates over all block references of the previous round included in the current block
+
+            // leader: r-2
+            // boost: r-1
+            // support: r -> find_support( ..., r)
+
+            // leader: r-1
+            // support: r
+
+
             // Weak links may point to blocks with lower round numbers than strong links.
-            if include.round() < round {
+            // include.round(): r, round: r
+            if include.round() < round -1{ 
                 continue;
-            }
-            if include.author_round() == (author, round) {
+            } // only consider include rounds strictly less than r-2
+
+            if include.author_round() == (author, round-1) {
                 return Some(*include);
-            }
+            } // author always includes previous author block
             let include = self
                 .block_store
                 .get_block(*include)
                 .expect("We should have the whole sub-dag by now");
-            if let Some(support) = self.find_support((author, round), &include) {
+            if let Some(support) = self.find_support((author, round-1), &include) {
                 return Some(support);
             }
         }
@@ -128,7 +147,7 @@ impl BaseCommitter {
     }
 
     /// Check whether the specified block (`potential_certificate`) is a vote for
-    /// the specified leader (`leader_block`).
+    /// the specified leader (`leader_block`). *apply to each block in proposer round.
     fn is_vote(
         &self,
         potential_vote: &Data<StatementBlock>,
@@ -179,16 +198,18 @@ impl BaseCommitter {
         // Get all blocks that could be potential certificates for the target leader. These blocks
         // are in the decision round of the target leader and are linked to the anchor.
         let wave = self.wave_number(leader_round);
+        let certification_round = self.certification_round(wave);
+        let certification_blocks = self.block_store.get_blocks_by_round(certification_round);
         let decision_round = self.decision_round(wave);
         let decision_blocks = self.block_store.get_blocks_by_round(decision_round);
-        let potential_certificates: Vec<_> = decision_blocks
+        let potential_certificates: Vec<_> = certification_blocks
             .iter()
             .filter(|block| self.block_store.linked(anchor, block))
             .collect();
 
         // Use those potential certificates to determine which (if any) of the target leader
         // blocks can be committed.
-        let mut certified_leader_blocks: Vec<_> = leader_blocks
+        let certified_leader_blocks: Vec<_> = leader_blocks
             .into_iter()
             .filter(|leader_block| {
                 potential_certificates.iter().any(|potential_certificate| {
@@ -200,12 +221,23 @@ impl BaseCommitter {
         // There can be at most one certified leader, otherwise it means the BFT assumption is broken.
         if certified_leader_blocks.len() > 1 {
             panic!("More than one certified block at wave {wave} from leader {leader}")
-        }
+        } // this can disappear in async - everyones a potential leader and we can have many certified leader blocks
+
+        // Put certified leader blocks into decision blocks. If decision blocks reference certified leader we commit
+
+        let mut decided_certified_leader_blocks: Vec<_> = certified_leader_blocks
+            .into_iter()
+            .filter(|certified_leader_block|{
+                decision_blocks.iter().any(|decision_block|{
+                    self.is_vote(decision_block, certified_leader_block)
+            })
+        })
+        .collect();
 
         // We commit the target leader if it has a certificate that is an ancestor of the anchor.
         // Otherwise skip it.
-        match certified_leader_blocks.pop() {
-            Some(certified_leader_block) => LeaderStatus::Commit(certified_leader_block.clone()),
+        match decided_certified_leader_blocks.pop() {
+            Some(decided_certified_leader_blocks) => LeaderStatus::Commit(decided_certified_leader_blocks.clone()),
             None => LeaderStatus::Skip(leader, leader_round),
         }
     }
@@ -299,7 +331,7 @@ impl BaseCommitter {
     ) -> LeaderStatus {
         // Check whether the leader has enough blame. That is, whether there are 2f+1 non-votes
         // for that leader (which ensure there will never be a certificate for that leader).
-        let voting_round = leader_round + 1;
+        let voting_round = leader_round + 2;
         if self.enough_leader_blame(voting_round, leader) {
             return LeaderStatus::Skip(leader, leader_round);
         }

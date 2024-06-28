@@ -18,7 +18,7 @@ fn direct_commit() {
     let committee = committee(4);
 
     let mut block_writer = TestBlockWriter::new(&committee);
-    build_dag(&committee, &mut block_writer, None, 5);
+    build_dag(&committee, &mut block_writer, None, DEFAULT_WAVE_LENGTH+5);
 
     let committer = UniversalCommitterBuilder::new(
         committee.clone(),
@@ -37,7 +37,7 @@ fn direct_commit() {
     } else {
         panic!("Expected a committed leader")
     };
-}
+} // change to make test DAG longer
 
 /// Ensure idempotent replies.
 #[test]

@@ -400,12 +400,12 @@ fn indirect_skip() {
         .filter(|x| x.authority != leader_round_4)
         .collect();
 
-    // Only f+1 validators connect to the 4th leader.
+    // Only f validators connect to the 4th leader.
     let mut references_5 = Vec::new();
 
     let connections_without_leader_4 = committee
         .authorities()
-        .skip(committee.quorum_threshold() as usize)
+        .skip((committee.validity_threshold()+1) as usize) // skip 2f+1 
         .map(|authority| (authority, references_without_leader_4.clone()))
         .collect();
     references_5.extend(build_dag_layer(

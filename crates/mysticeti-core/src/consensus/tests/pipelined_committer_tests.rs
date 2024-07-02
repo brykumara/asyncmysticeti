@@ -380,7 +380,7 @@ fn indirect_commit() {
     };
 }
 
-/// Commit the first 3 leaders, skip the 4th, and commit the next 3 leaders. done
+/// Commit the first 3 leaders, skip the 4th, and commit the next 3 leaders.
 #[test]
 #[tracing_test::traced_test]
 fn indirect_skip() {
@@ -405,7 +405,7 @@ fn indirect_skip() {
 
     let connections_without_leader_4 = committee
         .authorities()
-        .skip(committee.validity_threshold() as usize)
+        .take(committee.validity_threshold() as usize)
         .map(|authority| (authority, references_without_leader_4.clone()))
         .collect();
     references_5.extend(build_dag_layer(
@@ -414,7 +414,7 @@ fn indirect_skip() {
     ));
 
     // Add enough blocks to reach the decision round of the 7th leader.
-    let decision_round_7 = 2* wave_length+2;
+    let decision_round_7 = wave_length+7;
     build_dag(
         &committee,
         &mut block_writer,
@@ -494,11 +494,11 @@ fn undecided() {
         .map(|authority| (authority, references_1_without_leader.clone()))
         .collect();
 
-    let connections = leader_connection.into_iter().chain(non_leader_connections);
-    let references = build_dag_layer(connections.collect(), &mut block_writer);
+    //let connections = leader_connection.into_iter().chain(non_leader_connections);
+    let references = build_dag_layer(non_leader_connections, &mut block_writer);
 
     // Add enough blocks to reach the first decision round
-    let decision_round_1 = wave_length-1;
+    let decision_round_1 = wave_length;
     build_dag(
         &committee,
         &mut block_writer,

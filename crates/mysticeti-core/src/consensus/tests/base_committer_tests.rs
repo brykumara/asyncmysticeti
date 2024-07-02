@@ -483,7 +483,7 @@ fn commit_single_link_leader_with_booster() {
     let mut authorities = committee.authorities();
     let leader_connection = vec![(authorities.next().unwrap(), references_1)];
     let non_leader_connections: Vec<_> = authorities
-        .take((committee.quorum_threshold() - 1) as usize)
+        .take((committee.validity_threshold()) as usize)
         .map(|authority| (authority, references_without_leader_1.clone()))
         .collect();
 
@@ -491,7 +491,7 @@ fn commit_single_link_leader_with_booster() {
     let references = build_dag_layer(connections.collect(), &mut block_writer);
 
     // Add enough blocks to reach the decision round of the first leader.
-    let decision_round_1 = 2 * wave_length - 1;
+    let decision_round_1 = wave_length;
     build_dag(
         &committee,
         &mut block_writer,
@@ -538,7 +538,7 @@ fn undecided() {
     let mut authorities = committee.authorities();
     let leader_connection = vec![(authorities.next().unwrap(), references_1)];
     let non_leader_connections: Vec<_> = authorities
-        .take((committee.quorum_threshold() - 1) as usize)
+        .take(1 as usize)
         .map(|authority| (authority, references_without_leader_1.clone()))
         .collect();
 

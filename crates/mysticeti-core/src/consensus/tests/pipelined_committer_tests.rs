@@ -390,7 +390,7 @@ fn indirect_skip() {
     let mut block_writer = TestBlockWriter::new(&committee);
 
     // Add enough blocks to reach the 4th leader.
-    let leader_round_4 = wave_length -1; // need round 4 to reach 4th leader
+    let leader_round_4 = wave_length -1 ; // need round 4 to reach 4th leader
     let references_4 = build_dag(&committee, &mut block_writer, None, leader_round_4);
 
     // Filter out that leader.
@@ -405,7 +405,7 @@ fn indirect_skip() {
 
     let connections_without_leader_4 = committee
         .authorities()
-        .take(committee.validity_threshold() as usize)
+        .skip(committee.quorum_threshold() as usize)
         .map(|authority| (authority, references_without_leader_4.clone()))
         .collect();
     references_5.extend(build_dag_layer(
@@ -413,8 +413,9 @@ fn indirect_skip() {
         &mut block_writer,
     ));
 
+
     // Add enough blocks to reach the decision round of the 7th leader.
-    let decision_round_7 = wave_length+7;
+    let decision_round_7 = 2* wave_length +2;
     build_dag(
         &committee,
         &mut block_writer,

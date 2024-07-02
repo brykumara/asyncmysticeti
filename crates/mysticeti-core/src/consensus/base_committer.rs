@@ -6,7 +6,7 @@ use std::{fmt::Display, sync::Arc};
 use super::{LeaderStatus, DEFAULT_WAVE_LENGTH};
 use crate::{
     block_store::BlockStore,
-    committee::{Committee, QuorumThreshold, StakeAggregator},
+    committee::{Committee, QuorumThreshold, StakeAggregator,AllThreshold},
     consensus::MINIMUM_WAVE_LENGTH,
     data::Data,
     types::{format_authority_round, AuthorityIndex, BlockReference, RoundNumber, StatementBlock},
@@ -82,11 +82,6 @@ impl BaseCommitter {
         wave * wave_length + wave_length - 1 + self.options.round_offset
     }
 
-    /// Return the certification round.
-    fn certification_round(&self, wave: WaveNumber) -> RoundNumber {
-        self.decision_round(wave)-1
-    }
-
     /// The leader-elect protocol is offset by `leader_offset` to ensure that different committers
     /// with different leader offsets elect different leaders for the same round number. This function
     /// returns `None` if there are no leaders for the specified round.
@@ -110,7 +105,7 @@ impl BaseCommitter {
         (author, round): (AuthorityIndex, RoundNumber),
         from: &Data<StatementBlock>,
     ) -> Option<BlockReference> {
-        if from.round() < round-1 { 
+        if from.round() < round { 
             return None;
         } 
         for include in from.includes() { // iterates over all hash links to other blocks this block includes
@@ -128,18 +123,18 @@ impl BaseCommitter {
 
             // Weak links may point to blocks with lower round numbers than strong links.
             // include.round(): r, round: r
-            if include.round() < round -1{ 
+            if include.round() < round { 
                 continue;
             } // only consider include rounds strictly less than r-2
 
-            if include.author_round() == (author, round-1) {
+            if include.author_round() == (author, round) {
                 return Some(*include);
             } // author always includes previous author block
             let include = self
                 .block_store
                 .get_block(*include)
                 .expect("We should have the whole sub-dag by now");
-            if let Some(support) = self.find_support((author, round-1), &include) {
+            if let Some(support) = self.find_support((author, round), &include) {
                 return Some(support);
             }
         }
@@ -198,14 +193,22 @@ impl BaseCommitter {
         // Get all blocks that could be potential certificates for the target leader. These blocks
         // are in the decision round of the target leader and are linked to the anchor.
         let wave = self.wave_number(leader_round);
-        let certification_round = self.certification_round(wave);
-        let certification_blocks = self.block_store.get_blocks_by_round(certification_round);
         let decision_round = self.decision_round(wave);
         let decision_blocks = self.block_store.get_blocks_by_round(decision_round);
-        let potential_certificates: Vec<_> = certification_blocks
+        let potential_certificates: Vec<_> = decision_blocks
             .iter()
             .filter(|block| self.block_store.linked(anchor, block))
             .collect();
+
+        //let wave = self.wave_number(leader_round);
+        //let certification_round = self.certification_round(wave);
+        //let certification_blocks = self.block_store.get_blocks_by_round(certification_round);
+        //let decision_round = self.decision_round(wave);
+        //let decision_blocks = self.block_store.get_blocks_by_round(decision_round);
+        //let potential_certificates: Vec<_> = certification_blocks
+        //    .iter()
+        //    .filter(|block| self.block_store.linked(anchor, block))
+        //    .collect();
 
         // Use those potential certificates to determine which (if any) of the target leader
         // blocks can be committed.
@@ -247,7 +250,7 @@ impl BaseCommitter {
     fn enough_leader_blame(&self, voting_round: RoundNumber, leader: AuthorityIndex) -> bool {
         let voting_blocks = self.block_store.get_blocks_by_round(voting_round);
 
-        let mut blame_stake_aggregator = StakeAggregator::<QuorumThreshold>::new();
+        let mut blame_stake_aggregator = StakeAggregator::<AllThreshold>::new();
         for voting_block in &voting_blocks {
             let voter = voting_block.reference().authority;
             if voting_block
@@ -331,7 +334,7 @@ impl BaseCommitter {
     ) -> LeaderStatus {
         // Check whether the leader has enough blame. That is, whether there are 2f+1 non-votes
         // for that leader (which ensure there will never be a certificate for that leader).
-        let voting_round = leader_round + 2;
+        let voting_round = leader_round + 1; 
         if self.enough_leader_blame(voting_round, leader) {
             return LeaderStatus::Skip(leader, leader_round);
         }

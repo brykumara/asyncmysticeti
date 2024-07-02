@@ -50,7 +50,7 @@ fn idempotence() {
     let wave_length = DEFAULT_WAVE_LENGTH;
 
     let mut block_writer = TestBlockWriter::new(&committee);
-    build_dag(&committee, &mut block_writer, None, 5);
+    build_dag(&committee, &mut block_writer, None, wave_length*2-1);
 
     let committer = UniversalCommitterBuilder::new(
         committee.clone(),
@@ -280,7 +280,7 @@ fn direct_skip() {
     }
 }
 
-/// Indirect-commit the first leader.
+/// Indirect-commit the first leader. // done
 #[test]
 #[tracing_test::traced_test]
 fn indirect_commit() {
@@ -318,14 +318,14 @@ fn indirect_commit() {
         build_dag_layer(connections_without_leader_1, &mut block_writer);
 
     // Only f+1 validators certify the 1st leader.
-    let mut references_3 = Vec::new();
-
+    let mut references_2 = Vec::new();
+    
     let connections_with_votes_for_leader_1 = committee
         .authorities()
         .take(committee.validity_threshold() as usize)
         .map(|authority| (authority, references_with_votes_for_leader_1.clone()))
         .collect();
-    references_3.extend(build_dag_layer(
+    references_2.extend(build_dag_layer(
         connections_with_votes_for_leader_1,
         &mut block_writer,
     ));
@@ -340,20 +340,20 @@ fn indirect_commit() {
         .skip(committee.validity_threshold() as usize)
         .map(|authority| (authority, references.clone()))
         .collect();
-    references_3.extend(build_dag_layer(
+    references_2.extend(build_dag_layer(
         connections_without_votes_for_leader_1,
         &mut block_writer,
     ));
-
+    
     // Add enough blocks to decide the 5th leader. The second leader may be skipped
     // (if it was the vote for the first leader that we removed) so we add enough blocks
     // to recursively decide it.
-    let decision_round_3 = 2 * wave_length + 1;
+    let decision_round_2 = 2 * wave_length -1;
     build_dag(
         &committee,
         &mut block_writer,
-        Some(references_3),
-        decision_round_3,
+        Some(references_2),
+        decision_round_2,
     );
 
     // Ensure we commit the first leaders.
@@ -380,7 +380,7 @@ fn indirect_commit() {
     };
 }
 
-/// Commit the first 3 leaders, skip the 4th, and commit the next 3 leaders.
+/// Commit the first 3 leaders, skip the 4th, and commit the next 3 leaders. done
 #[test]
 #[tracing_test::traced_test]
 fn indirect_skip() {
@@ -390,28 +390,18 @@ fn indirect_skip() {
     let mut block_writer = TestBlockWriter::new(&committee);
 
     // Add enough blocks to reach the 4th leader.
-    let leader_round_4 = wave_length + 1;
+    let leader_round_4 = wave_length -1; // need round 4 to reach 4th leader
     let references_4 = build_dag(&committee, &mut block_writer, None, leader_round_4);
 
     // Filter out that leader.
     let references_without_leader_4: Vec<_> = references_4
         .iter()
         .cloned()
-        .filter(|x| x.authority != committee.elect_leader(leader_round_4))
+        .filter(|x| x.authority != leader_round_4)
         .collect();
 
     // Only f+1 validators connect to the 4th leader.
     let mut references_5 = Vec::new();
-
-    let connections_with_leader_4 = committee
-        .authorities()
-        .take(committee.validity_threshold() as usize)
-        .map(|authority| (authority, references_4.clone()))
-        .collect();
-    references_5.extend(build_dag_layer(
-        connections_with_leader_4,
-        &mut block_writer,
-    ));
 
     let connections_without_leader_4 = committee
         .authorities()
@@ -424,14 +414,13 @@ fn indirect_skip() {
     ));
 
     // Add enough blocks to reach the decision round of the 7th leader.
-    let decision_round_7 = 3 * wave_length;
+    let decision_round_7 = 2* wave_length+2;
     build_dag(
         &committee,
         &mut block_writer,
         Some(references_5),
         decision_round_7,
     );
-
     // Ensure we commit the first 3 leaders, skip the 4th, and commit the last 2 leaders.
     let committer = UniversalCommitterBuilder::new(
         committee.clone(),
@@ -445,7 +434,7 @@ fn indirect_skip() {
     let last_committed = BlockReference::new_test(0, 0);
     let sequence = committer.try_commit(last_committed);
     tracing::info!("Commit sequence: {sequence:?}");
-    assert_eq!(sequence.len(), 7);
+    assert_eq!(sequence.len(), 6);
 
     // Ensure we commit the first 3 leaders.
     for i in 0..=2 {
@@ -477,7 +466,7 @@ fn indirect_skip() {
     }
 }
 
-/// If there is no leader with enough support nor blame, we commit nothing.
+/// If there is no leader with enough support nor blame, we commit nothing. done
 #[test]
 #[tracing_test::traced_test]
 fn undecided() {
@@ -509,7 +498,7 @@ fn undecided() {
     let references = build_dag_layer(connections.collect(), &mut block_writer);
 
     // Add enough blocks to reach the first decision round
-    let decision_round_1 = wave_length;
+    let decision_round_1 = wave_length-1;
     build_dag(
         &committee,
         &mut block_writer,

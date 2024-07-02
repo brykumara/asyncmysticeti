@@ -38,6 +38,7 @@ pub struct Committee {
     authorities: Vec<Authority>,
     validity_threshold: Stake, // The minimum stake required for validity
     quorum_threshold: Stake,   // The minimum stake required for quorum
+    total_stake: Stake
 }
 
 impl Committee {
@@ -69,6 +70,7 @@ impl Committee {
             authorities,
             validity_threshold,
             quorum_threshold,
+            total_stake
         })
     }
 
@@ -125,6 +127,11 @@ impl Committee {
 
     pub fn is_quorum(&self, amount: Stake) -> bool {
         amount > self.quorum_threshold
+    }
+
+
+    pub fn is_all(&self, amount: Stake) -> bool {
+        amount == self.total_stake
     }
 
     pub fn get_total_stake<A: Borrow<AuthorityIndex>>(&self, authorities: &HashSet<A>) -> Stake {
@@ -194,6 +201,8 @@ pub trait CommitteeThreshold: Clone {
 pub struct QuorumThreshold;
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ValidityThreshold;
+#[derive(Serialize, Deserialize, Clone)]
+pub struct AllThreshold;
 
 impl CommitteeThreshold for QuorumThreshold {
     fn is_threshold(committee: &Committee, amount: Stake) -> bool {
@@ -204,6 +213,12 @@ impl CommitteeThreshold for QuorumThreshold {
 impl CommitteeThreshold for ValidityThreshold {
     fn is_threshold(committee: &Committee, amount: Stake) -> bool {
         committee.is_valid(amount)
+    }
+}
+
+impl CommitteeThreshold for AllThreshold {
+    fn is_threshold(committee: &Committee, amount: Stake) -> bool {
+       committee.is_all(amount)
     }
 }
 

@@ -18,7 +18,7 @@ fn direct_commit() {
     let committee = committee(4);
 
     let mut block_writer = TestBlockWriter::new(&committee);
-    build_dag(&committee, &mut block_writer, None, DEFAULT_WAVE_LENGTH+5);
+    build_dag(&committee, &mut block_writer, None, DEFAULT_WAVE_LENGTH*2-1);
 
     let committer = UniversalCommitterBuilder::new(
         committee.clone(),
@@ -46,7 +46,7 @@ fn idempotence() {
     let committee = committee(4);
 
     let mut block_writer = TestBlockWriter::new(&committee);
-    build_dag(&committee, &mut block_writer, None, 5);
+    build_dag(&committee, &mut block_writer, None, DEFAULT_WAVE_LENGTH*2-1);
 
     let committer = UniversalCommitterBuilder::new(
         committee.clone(),
@@ -75,7 +75,7 @@ fn multiple_direct_commit() {
     let wave_length = DEFAULT_WAVE_LENGTH;
 
     let mut last_committed = BlockReference::new_test(0, 0);
-    for n in 1..=10 {
+    for n in 1..=wave_length*3 {
         let enough_blocks = wave_length * (n + 1) - 1;
         let mut block_writer = TestBlockWriter::new(&committee);
         build_dag(&committee, &mut block_writer, None, enough_blocks);
@@ -111,7 +111,7 @@ fn direct_commit_late_call() {
     let committee = committee(4);
     let wave_length = DEFAULT_WAVE_LENGTH;
 
-    let n = 10;
+    let n = wave_length*3;
     let enough_blocks = wave_length * (n + 1) - 1;
     let mut block_writer = TestBlockWriter::new(&committee);
     build_dag(&committee, &mut block_writer, None, enough_blocks);
@@ -366,10 +366,10 @@ fn indirect_commit() {
     };
 }
 
-/// Commit the first leader, skip the 2nd, and commit the 3rd leader.
+/// Check that booster round works where the 2nd leader only receives f+1 connections. 
 #[test]
 #[tracing_test::traced_test]
-fn indirect_skip() {
+fn commit_with_booster() {
     let committee = committee(4);
     let wave_length = DEFAULT_WAVE_LENGTH;
 
@@ -433,7 +433,7 @@ fn indirect_skip() {
     tracing::info!("Commit sequence: {sequence:?}");
     assert_eq!(sequence.len(), 3);
 
-    // Ensure we commit the leader of wave 1.
+    // Ensure we commit the 1st leader.
     let leader_round_1 = wave_length;
     let leader_1 = committee.elect_leader(leader_round_1);
     if let LeaderStatus::Commit(ref block) = sequence[0] {
@@ -442,13 +442,11 @@ fn indirect_skip() {
         panic!("Expected a committed leader")
     };
 
-    // Ensure we skip the 2nd leader.
-    let leader_round_2 = 2 * wave_length;
-    if let LeaderStatus::Skip(leader, round) = sequence[1] {
-        assert_eq!(leader, leader_2);
-        assert_eq!(round, leader_round_2);
+    // Ensure we commit the 2nd leader.
+    if let LeaderStatus::Commit(ref block) = sequence[1] {
+        assert_eq!(block.author(), leader_2);
     } else {
-        panic!("Expected a skipped leader")
+        panic!("Expected a committed leader")
     }
 
     // Ensure we commit the 3rd leader.
@@ -459,6 +457,61 @@ fn indirect_skip() {
     } else {
         panic!("Expected a committed leader")
     }
+}
+
+/// The booster round ensure we may commit even with a single link to the leader.
+#[test]
+#[tracing_test::traced_test]
+fn commit_single_link_leader_with_booster() {
+    let committee = committee(4);
+    let wave_length = DEFAULT_WAVE_LENGTH;
+
+    let mut block_writer = TestBlockWriter::new(&committee);
+
+    // Add enough blocks to reach the first leader.
+    let leader_round_1 = wave_length;
+    let references_1 = build_dag(&committee, &mut block_writer, None, leader_round_1);
+
+    // Filter out that leader.
+    let references_without_leader_1: Vec<_> = references_1
+        .iter()
+        .cloned()
+        .filter(|x| x.authority != committee.elect_leader(leader_round_1))
+        .collect();
+
+    // Create a dag layer where only one authority votes for the first leader.
+    let mut authorities = committee.authorities();
+    let leader_connection = vec![(authorities.next().unwrap(), references_1)];
+    let non_leader_connections: Vec<_> = authorities
+        .take((committee.quorum_threshold() - 1) as usize)
+        .map(|authority| (authority, references_without_leader_1.clone()))
+        .collect();
+
+    let connections = leader_connection.into_iter().chain(non_leader_connections);
+    let references = build_dag_layer(connections.collect(), &mut block_writer);
+
+    // Add enough blocks to reach the decision round of the first leader.
+    let decision_round_1 = 2 * wave_length - 1;
+    build_dag(
+        &committee,
+        &mut block_writer,
+        Some(references),
+        decision_round_1,
+    );
+
+    // Ensure no blocks are committed.
+    let committer = UniversalCommitterBuilder::new(
+        committee.clone(),
+        block_writer.into_block_store(),
+        test_metrics(),
+    )
+    .with_wave_length(wave_length)
+    .build();
+
+    let last_committed = BlockReference::new_test(0, 0);
+    let sequence = committer.try_commit(last_committed);
+    tracing::info!("Commit sequence: {sequence:?}");
+    assert!(sequence.is_empty());
 }
 
 /// If there is no leader with enough support nor blame, we commit nothing.
@@ -493,7 +546,7 @@ fn undecided() {
     let references = build_dag_layer(connections.collect(), &mut block_writer);
 
     // Add enough blocks to reach the decision round of the first leader.
-    let decision_round_1 = 2 * wave_length - 1;
+    let decision_round_1 = wave_length - 1;
     build_dag(
         &committee,
         &mut block_writer,

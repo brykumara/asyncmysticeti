@@ -34,6 +34,8 @@ use crate::{
     threshold_clock::threshold_clock_valid_non_genesis,
 };
 
+const METADATA_LENGTH: usize = 32;
+
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub enum Vote {
     Accept,
@@ -95,6 +97,10 @@ pub struct StatementBlock {
 
     // Signature by the block author
     signature: SignatureBytes,
+
+    // Common coin shares
+    //coin_share_part_1: [u8; METADATA_LENGTH],
+    //coin_share_part_2: [u8; METADATA_LENGTH],
 }
 
 #[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize, Default)]
@@ -127,6 +133,8 @@ impl StatementBlock {
             0,
             false,
             SignatureBytes::default(),
+            //[0; METADATA_LENGTH],
+            //[0; METADATA_LENGTH],
         ))
     }
 
@@ -147,6 +155,12 @@ impl StatementBlock {
             meta_creation_time_ns,
             epoch_marker,
         );
+
+        // TODO: Add a BLS signature over the round number,
+        // include a new Signer (that is a BLS signer) as input of this function.
+        //let coin_share_part_1 = [0; METADATA_LENGTH]; 
+        //let coin_share_part_2 = [0; METADATA_LENGTH]; 
+
         Self::new(
             authority,
             round,
@@ -155,6 +169,8 @@ impl StatementBlock {
             meta_creation_time_ns,
             epoch_marker,
             signature,
+            //coin_share_part_1,
+            //coin_share_part_2
         )
     }
 
@@ -166,6 +182,8 @@ impl StatementBlock {
         meta_creation_time_ns: TimestampNs,
         epoch_marker: EpochStatus,
         signature: SignatureBytes,
+        //coin_share_part_1: [u8; METADATA_LENGTH],
+        //coin_share_part_2: [u8; METADATA_LENGTH],
     ) -> Self {
         Self {
             reference: BlockReference {
@@ -186,6 +204,8 @@ impl StatementBlock {
             meta_creation_time_ns,
             epoch_marker,
             signature,
+            //coin_share_part_1,
+            //coin_share_part_2
         }
     }
 
@@ -685,6 +705,8 @@ mod test {
                 meta_creation_time_ns: 0,
                 epoch_marker: false,
                 signature: Default::default(),
+                //coin_share_part_1: [0; METADATA_LENGTH],
+                //coin_share_part_2: [0; METADATA_LENGTH],
             }
         }
 

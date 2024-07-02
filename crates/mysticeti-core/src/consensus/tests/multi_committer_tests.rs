@@ -19,7 +19,7 @@ fn direct_commit() {
     let wave_length = DEFAULT_WAVE_LENGTH;
     for number_of_leaders in 1..committee.len() {
         let mut block_writer = TestBlockWriter::new(&committee);
-        build_dag(&committee, &mut block_writer, None, 5);
+        build_dag(&committee, &mut block_writer, None, wave_length*2-1);
 
         let committer = UniversalCommitterBuilder::new(
             committee.clone(),
@@ -56,7 +56,7 @@ fn idempotence() {
     let wave_length = DEFAULT_WAVE_LENGTH;
     for number_of_leaders in 1..committee.len() {
         let mut block_writer = TestBlockWriter::new(&committee);
-        build_dag(&committee, &mut block_writer, None, 5);
+        build_dag(&committee, &mut block_writer, None, wave_length*2-1);
 
         let committer = UniversalCommitterBuilder::new(
             committee.clone(),
@@ -465,7 +465,7 @@ fn indirect_commit() {
     };
 }
 
-/// Commit the leaders of wave 1, skip the first leader of wave 2, and commit the leaders of wave 3.
+/// Commit the leaders of wave 1, skip the first leader of wave 2, and commit the leaders of wave 3. done
 #[test]
 #[tracing_test::traced_test]
 fn indirect_skip() {
@@ -489,16 +489,6 @@ fn indirect_skip() {
 
     // Only f+1 validators connect to that leader.
     let mut references = Vec::new();
-
-    let connections_with_leader_2 = committee
-        .authorities()
-        .take(committee.validity_threshold() as usize)
-        .map(|authority| (authority, references_2.clone()))
-        .collect();
-    references.extend(build_dag_layer(
-        connections_with_leader_2,
-        &mut block_writer,
-    ));
 
     let connections_without_leader_2 = committee
         .authorities()
@@ -588,7 +578,7 @@ fn indirect_skip() {
     }
 }
 
-/// If there is no leader with enough support nor blame, we commit nothing.
+/// If there is no leader with enough support nor blame, we commit nothing. done
 #[test]
 #[tracing_test::traced_test]
 fn undecided() {
@@ -617,8 +607,8 @@ fn undecided() {
         .map(|authority| (authority, references_1_without_leader.clone()))
         .collect();
 
-    let connections = leader_connection.into_iter().chain(non_leader_connections);
-    let references = build_dag_layer(connections.collect(), &mut block_writer);
+    //let connections = leader_connection.into_iter().chain(non_leader_connections);
+    let references = build_dag_layer(non_leader_connections, &mut block_writer);
 
     // Add enough blocks to reach the decision round of wave 1.
     let decision_round_1 = 2 * wave_length - 1;

@@ -105,7 +105,7 @@ impl BaseCommitter {
         (author, round): (AuthorityIndex, RoundNumber),
         from: &Data<StatementBlock>,
     ) -> Option<BlockReference> {
-        if from.round() < round { 
+        if from.round() < round { // shouldn't this be <= ?
             return None;
         } 
         for include in from.includes() { // iterates over all hash links to other blocks this block includes
@@ -117,13 +117,13 @@ impl BaseCommitter {
             // boost: r-1
             // support: r -> find_support( ..., r)
 
-            // leader: r-1
+            // leader: r-1 // this is the partial synchronous version right?
             // support: r
 
 
             // Weak links may point to blocks with lower round numbers than strong links.
             // include.round(): r, round: r
-            if include.round() < round { 
+            if include.round() < round { // should this be <= ?
                 continue;
             } // only consider include rounds strictly less than r-2
 
@@ -208,7 +208,7 @@ impl BaseCommitter {
         //let potential_certificates: Vec<_> = certification_blocks
         //    .iter()
         //    .filter(|block| self.block_store.linked(anchor, block))
-        //    .collect();
+        //    .collect(); // this is the same as the above block
 
         // Use those potential certificates to determine which (if any) of the target leader
         // blocks can be committed.
@@ -224,18 +224,18 @@ impl BaseCommitter {
         // There can be at most one certified leader, otherwise it means the BFT assumption is broken.
         if certified_leader_blocks.len() > 1 {
             panic!("More than one certified block at wave {wave} from leader {leader}")
-        } // this can disappear in async - everyones a potential leader and we can have many certified leader blocks
+        } // this can disappear in async - everyones a potential leader and we can have many certified leader blocks -- how? here we are checking whether there is a single certified block from a given leader right? under asynchrony, this condition remains the same?
 
         // Put certified leader blocks into decision blocks. If decision blocks reference certified leader we commit
 
-        let mut decided_certified_leader_blocks: Vec<_> = certified_leader_blocks
+        let mut decided_certified_leader_blocks: Vec<_> = certified_leader_blocks // given that certified_leader_blocks is at most 1, the iter is redundant
             .into_iter()
             .filter(|certified_leader_block|{
                 decision_blocks.iter().any(|decision_block|{
                     self.is_vote(decision_block, certified_leader_block)
             })
         })
-        .collect();
+        .collect(); // why is this check important? certified_leader_blocks contain 1 leader block which has at least one cert, to which there is a path from the anchor == once we have this, why should we check if there is a vote from the decision block to the certified leader block?
 
         // We commit the target leader if it has a certificate that is an ancestor of the anchor.
         // Otherwise skip it.
@@ -246,7 +246,7 @@ impl BaseCommitter {
     }
 
     /// Check whether the specified leader has enough blames (that is, 2f+1 non-votes) to be
-    /// directly skipped.
+    /// directly skipped. // is this the direct skip rule of async mystecity? don't we conclude undecided even if there is at least 1 support?
     fn enough_leader_blame(&self, voting_round: RoundNumber, leader: AuthorityIndex) -> bool {
         let voting_blocks = self.block_store.get_blocks_by_round(voting_round);
 
@@ -333,10 +333,10 @@ impl BaseCommitter {
         leader_round: RoundNumber,
     ) -> LeaderStatus {
         // Check whether the leader has enough blame. That is, whether there are 2f+1 non-votes
-        // for that leader (which ensure there will never be a certificate for that leader).
+        // for that leader (which ensure there will never be a certificate for that leader). // is this consistent with the skip rule we dicussed where if there is at least 1 skip we cannot skip?
         let voting_round = leader_round + 1; 
         if self.enough_leader_blame(voting_round, leader) {
-            return LeaderStatus::Skip(leader, leader_round);
+            return LeaderStatus::Skip(leader, leader_round); // is this correct? (1) not sure if this is the skip rule we dicussed (2) we have a boosting round r+2
         }
 
         // Check whether the leader(s) has enough support. That is, whether there are 2f+1
@@ -350,7 +350,7 @@ impl BaseCommitter {
         let mut leaders_with_enough_support: Vec<_> = leader_blocks
             .into_iter()
             .filter(|l| self.enough_leader_support(decision_round, l))
-            .map(LeaderStatus::Commit)
+            .map(LeaderStatus::Commit) // does this change the state of the leader to commit? shouldn't the line 358 come before this?
             .collect();
 
         // There can be at most one leader with enough support for each round, otherwise it means

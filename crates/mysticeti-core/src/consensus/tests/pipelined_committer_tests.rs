@@ -391,21 +391,19 @@ fn indirect_skip() {
 
     // Add enough blocks to reach the 4th leader.
     let leader_round_4 = wave_length-1 ; // need round 4 to reach 4th leader
-    let references_4 = build_dag(&committee, &mut block_writer, None, leader_round_4);
-
+    let references_4 = build_dag(&committee, &mut block_writer, None, leader_round_4); // build connected DAG up to round 3
     // Filter out that leader.
     let references_without_leader_4: Vec<_> = references_4
         .iter()
         .cloned()
         .filter(|x| x.authority != leader_round_4)
         .collect();
-
     // Only f validators connect to the 4th leader.
     let mut references_5 = Vec::new();
 
     let connections_without_leader_4 = committee
         .authorities()
-        .skip((committee.validity_threshold()) as usize) // skip 2f+1 
+        .skip((committee.quorum_threshold()) as usize) // Skip 2f+1 authorities
         .map(|authority| (authority, references_without_leader_4.clone()))
         .collect();
     references_5.extend(build_dag_layer(
@@ -414,7 +412,7 @@ fn indirect_skip() {
     ));
 
     // Add enough blocks to reach the decision round of the 7th leader.
-    let decision_round_7 = 2* wave_length +1;
+    let decision_round_7 = 2 * wave_length + 1;
     build_dag(
         &committee,
         &mut block_writer,

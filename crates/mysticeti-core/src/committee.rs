@@ -45,6 +45,9 @@ impl Committee {
     pub const DEFAULT_FILENAME: &'static str = "committee.yaml";
 
     pub fn new_test(stake: Vec<Stake>) -> Arc<Self> {
+        // for testing purposes, given a simple vector
+        // of n elements each with some stake, return a new committee
+        // the result is wrapped in Arc, such that the committee can be used by multiple threads safely
         let authorities = stake.into_iter().map(Authority::test_from_stake).collect();
         Self::new(authorities)
     }
@@ -63,7 +66,7 @@ impl Committee {
             total_stake = total_stake
                 .checked_add(a.stake())
                 .expect("Total stake overflow");
-        }
+        } // checked_add is for checking overflows
         let validity_threshold = total_stake / 3;
         let quorum_threshold = 2 * total_stake / 3;
         Arc::new(Committee {

@@ -487,7 +487,7 @@ fn commit_single_link_leader_with_booster() {
         .map(|authority| (authority, references_without_leader_1.clone()))
         .collect();
 
-    let connections = leader_connection.into_iter().chain(non_leader_connections);
+    let connections: std::iter::Chain<std::vec::IntoIter<(u64, Vec<BlockReference>)>, std::vec::IntoIter<(u64, Vec<BlockReference>)>> = leader_connection.into_iter().chain(non_leader_connections);
     let references = build_dag_layer(connections.collect(), &mut block_writer);
 
     // Add enough blocks to reach the decision round of the first leader.

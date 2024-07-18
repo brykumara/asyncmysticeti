@@ -32,6 +32,26 @@ use crate::{
     types::{AuthorityIndex, BlockReference, RoundNumber, StatementBlock},
 };
 
+
+/*
+    There are 3 components: worker, server, and network
+
+    workers and the server are connected using a set of channels, there is one channel from server to each worker
+    server listens to connections and upon receiving a new connection, send the connection to the appropiate worker for that remote peer
+    then worker manages the connection by handling reading and writing
+
+    the worker also initiates connection to remote peer, incase the server did not hear from the remote peer
+    i.e. there is at most one connection between any 2 peers; either initiated by peer A or peer B, and a single tcp connectoin is used as a bidrectional stream
+
+
+    the workers communicate with the network, using two channels -- a channel from network to worker and a chanel from worker to network
+    for all incoming traffic, the worker would do the decoding and send the message to the network
+    for all out going traffic, the network sends the work to the worker
+
+
+
+*/
+
 const PING_INTERVAL: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Serialize, Deserialize)]

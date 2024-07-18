@@ -142,9 +142,11 @@ impl<H: BlockHandler + 'static, C: CommitObserver + 'static> NetworkSyncer<H, C>
         ));
         let cleanup_task = handle.spawn(Self::cleanup_task(inner.clone()));
         while let Some(connection) = inner.recv_or_stopped(network.connection_receiver()).await {
+            // this thread is going to run until epoch change or until program terminates
             let peer_id = connection.peer_id;
             if let Some(task) = connections.remove(&peer_id) {
                 // wait until previous sync task completes
+                // for a given connection, only one outstanding task at a time
                 task.await.ok();
             }
 
@@ -157,6 +159,7 @@ impl<H: BlockHandler + 'static, C: CommitObserver + 'static> NetworkSyncer<H, C>
                 inner.clone(),
                 block_fetcher.clone(),
                 metrics.clone(),
+                // acutal handling of the connection task is done by a thread
             ));
             connections.insert(peer_id, task);
         }
